@@ -149,25 +149,22 @@ def ensure_rgb(image: Image.Image) -> Image.Image:
 # FEATURE EXTRACTION
 # -----------------------------
 def extract_features(image: Image.Image):
-    """
-    Extracts shape/texture using HOG and color data using HSV histograms.
-    This prevents the model from relying purely on flat background pixels.
-    """
-    image = image.resize((100, 100))
+    image = image.resize((64, 64))
     
+    # 1. Shape & Texture Features (HOG)
     gray_image = np.array(image.convert("L"))
     hog_features = hog(
         gray_image, 
         orientations=8, 
         pixels_per_cell=(16, 16),
-        cells_per_block=(1, 1), 
+        cells_per_block=(1, 1),
         feature_vector=True
     )
     
+    # 2. Advanced Color Features (HSV Histograms)
     hsv_image = image.convert("HSV")
     h, s, v = hsv_image.split()
     
-    # Create bins for color frequencies
     h_hist, _ = np.histogram(np.array(h).flatten(), bins=16, range=(0, 256))
     s_hist, _ = np.histogram(np.array(s).flatten(), bins=8, range=(0, 256))
     v_hist, _ = np.histogram(np.array(v).flatten(), bins=8, range=(0, 256))
