@@ -6,51 +6,102 @@ from typing import Tuple
 import numpy as np
 import streamlit as st
 from PIL import Image, ImageOps
+from skimage.feature import hog # NEW: For texture/edge detection
 
-# UI imports (keep ONLY one inject_css from ui.py)
+# UI imports
 from ui import inject_css, header, controls, show_preview, show_result
 
 APP_TITLE = "VasteAI"
 MODEL_PATH = "model.pkl"
 
 # -----------------------------
-# CLASS LABELS
+# UPDATED CLASS LABELS (Added Cardboard)
+# -----------------------------
+# -----------------------------
+# EXPANDED CLASS LABELS (10 Categories)
 # -----------------------------
 CLASS_LABELS = {
+    "battery": {
+        "title": "Battery (E-Waste)",
+        "emoji": "🔋",
+        "color": "#FEE2E2", # Red-ish warning
+        "border": "#B91C1C",
+        "bin": "E-Waste / Hazardous",
+        "instruction": "DO NOT put in normal bins. Take to a battery recycling drop-off.",
+    },
+    "biological": {
+        "title": "Biological / Organic",
+        "emoji": "🍎",
+        "color": "#ECFCCB", # Green/Yellow
+        "border": "#65A30D",
+        "bin": "Compost / Organics",
+        "instruction": "Place in your compost or green waste bin.",
+    },
+    "cardboard": {
+        "title": "Cardboard",
+        "emoji": "📦",
+        "color": "#FEF3C7", # Warm brown/yellow
+        "border": "#D97706",
+        "bin": "Paper recycling stream",
+        "instruction": "Keep dry and flatten before recycling.",
+    },
+    "clothes": {
+        "title": "Clothes / Textiles",
+        "emoji": "👕",
+        "color": "#F3E8FF", # Purple
+        "border": "#7E22CE",
+        "bin": "Textile donation / Recycling",
+        "instruction": "Donate if usable, or take to a textile recycling point.",
+    },
     "glass": {
         "title": "Glass",
         "emoji": "🍶",
-        "color": "#E0F7FA",
+        "color": "#E0F7FA", # Cyan
         "border": "#0891B2",
         "bin": "Glass recycling stream",
-        "instruction": "Rinse and place in the glass recycling bin.",
+        "instruction": "Rinse out liquids before recycling. Do not break.",
     },
     "metal": {
         "title": "Metal",
         "emoji": "🔩",
-        "color": "#F3E8FF",
-        "border": "#9333EA",
+        "color": "#E2E8F0", # Gray
+        "border": "#475569",
         "bin": "Metal recycling stream",
         "instruction": "Place clean metal items in recycling.",
+    },
+    "paper": {
+        "title": "Paper",
+        "emoji": "📄",
+        "color": "#F8FAFC", # White/Gray
+        "border": "#94A3B8",
+        "bin": "Paper recycling stream",
+        "instruction": "Keep dry. Shred confidential documents if necessary.",
     },
     "plastic": {
         "title": "Plastic",
         "emoji": "♻️",
-        "color": "#EFF6FF",
+        "color": "#EFF6FF", # Blue
         "border": "#2563EB",
         "bin": "Plastic recycling stream",
-        "instruction": "Rinse and recycle if accepted locally.",
+        "instruction": "Rinse and recycle. Check local rules for film plastics.",
+    },
+    "shoes": {
+        "title": "Shoes",
+        "emoji": "👟",
+        "color": "#FFEDD5", # Orange
+        "border": "#EA580C",
+        "bin": "Donation / Textile bin",
+        "instruction": "Tie pairs together and donate if in good condition.",
     },
     "trash": {
-        "title": "Trash",
+        "title": "General Trash",
         "emoji": "🗑️",
-        "color": "#FEE2E2",
-        "border": "#DC2626",
+        "color": "#FCE7F3", # Pink/Red
+        "border": "#BE185D",
         "bin": "General waste",
-        "instruction": "Dispose in general waste.",
+        "instruction": "Dispose in general waste. Cannot be recycled.",
     },
 }
-
 # -----------------------------
 # LANGUAGE CONFIG
 # -----------------------------
@@ -97,35 +148,34 @@ def ensure_rgb(image: Image.Image) -> Image.Image:
 # -----------------------------
 # FEATURE EXTRACTION
 # -----------------------------
-def extract_features(image):
-    image = image.resize((43, 43))
-    gray = image.convert("L")
-    gray_arr = np.array(gray) / 255.0
+def extract_features(image: Image.Image):
+    """
+    Extracts shape/texture using HOG and color data using HSV histograms.
+    This prevents the model from relying purely on flat background pixels.
+    """
+    image = image.resize((100, 100))
+    
+    gray_image = np.array(image.convert("L"))
+    hog_features = hog(
+        gray_image, 
+        orientations=8, 
+        pixels_per_cell=(16, 16),
+        cells_per_block=(1, 1), 
+        feature_vector=True
+    )
+    
+    hsv_image = image.convert("HSV")
+    h, s, v = hsv_image.split()
+    
+    # Create bins for color frequencies
+    h_hist, _ = np.histogram(np.array(h).flatten(), bins=16, range=(0, 256))
+    s_hist, _ = np.histogram(np.array(s).flatten(), bins=8, range=(0, 256))
+    v_hist, _ = np.histogram(np.array(v).flatten(), bins=8, range=(0, 256))
+    
+    color_features = np.concatenate([h_hist, s_hist, v_hist]) / (64 * 64)
 
-    gray_flat = gray_arr.flatten()
-
-    rgb = np.array(image) / 255.0
-    r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
-
-    color_features = np.array([
-        r.mean(), g.mean(), b.mean(),
-        r.std(), g.std(), b.std()
-    ])
-
-    extra_features = np.array([
-        gray_arr.mean(),
-        gray_arr.std(),
-        gray_arr.min(),
-        gray_arr.max()
-    ])
-
-    features = np.concatenate([gray_flat, color_features, extra_features])
-
-    if len(features) < 1871:
-        features = np.pad(features, (0, 1871 - len(features)))
-    else:
-        features = features[:1871]
-
+    features = np.concatenate([hog_features, color_features])
+    
     return features.reshape(1, -1)
 
 
