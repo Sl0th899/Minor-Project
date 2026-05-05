@@ -6,7 +6,6 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from skimage.feature import hog
 
-# This MUST perfectly match the function in your app!
 def extract_features(image: Image.Image):
     image = image.resize((64, 64))
     
@@ -73,7 +72,7 @@ def train_model(dataset_path="dataset"):
     with open("model.pkl", "wb") as f:
         pickle.dump(bundle, f)
         
-    print("✅ Training complete! You can now run your Streamlit app.")
+    print("Training complete!")
 
 if __name__ == "__main__":
     train_model()
