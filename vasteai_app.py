@@ -185,7 +185,7 @@ def predict_image(images, model, class_names):
     combined_predictions = None
 
     for image in images:
-        img = image.resize((128, 128))
+        img = image.resize((224, 224))
         img_array = tf.keras.utils.img_to_array(img)
         img_array = tf.expand_dims(img_array, 0)
         predictions = model.predict(img_array, verbose=0)[0]
